@@ -5,7 +5,7 @@ scala_import(
         ":cats_kernel"
     ],
     jars = [
-        "//external:jar/org/typelevel/cats_core_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_org/typelevel/cats_core_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/scala_lang:scala_library",
@@ -22,7 +22,7 @@ scala_import(
 scala_import(
     name = "cats_free",
     jars = [
-        "//external:jar/org/typelevel/cats_free_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_org/typelevel/cats_free_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/scala_lang:scala_library",
@@ -40,7 +40,7 @@ scala_import(
 scala_import(
     name = "cats_kernel",
     jars = [
-        "//external:jar/org/typelevel/cats_kernel_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_org/typelevel/cats_kernel_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/scala_lang:scala_library"
@@ -55,7 +55,7 @@ scala_import(
 scala_import(
     name = "cats_macros",
     jars = [
-        "//external:jar/org/typelevel/cats_macros_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_org/typelevel/cats_macros_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/scala_lang:scala_library",
@@ -71,7 +71,7 @@ scala_import(
 scala_import(
     name = "machinist",
     jars = [
-        "//external:jar/org/typelevel/machinist_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_org/typelevel/machinist_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/scala_lang:scala_library",
@@ -87,7 +87,7 @@ scala_import(
 scala_import(
     name = "macro_compat",
     jars = [
-        "//external:jar/org/typelevel/macro_compat_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_org/typelevel/macro_compat_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/scala_lang:scala_library"
@@ -102,7 +102,7 @@ scala_import(
 scala_import(
     name = "paiges_core",
     jars = [
-        "//external:jar/org/typelevel/paiges_core_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_org/typelevel/paiges_core_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/scala_lang:scala_library"

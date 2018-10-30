@@ -2,7 +2,7 @@ load("@io_bazel_rules_scala//scala:scala_import.bzl", "scala_import")
 scala_import(
     name = "circe_core",
     jars = [
-        "//external:jar/io/circe/circe_core_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_io/circe/circe_core_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/scala_lang:scala_library",
@@ -25,7 +25,7 @@ scala_import(
         "//3rdparty/jvm/org/typelevel:macro_compat"
     ],
     jars = [
-        "//external:jar/io/circe/circe_generic_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_io/circe/circe_generic_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/scala_lang:scala_library",
@@ -41,7 +41,7 @@ scala_import(
 scala_import(
     name = "circe_jackson25",
     jars = [
-        "//external:jar/io/circe/circe_jackson25_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_io/circe/circe_jackson25_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/com/fasterxml/jackson/core:jackson_core",
@@ -59,7 +59,7 @@ scala_import(
 scala_import(
     name = "circe_jawn",
     jars = [
-        "//external:jar/io/circe/circe_jawn_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_io/circe/circe_jawn_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/scala_lang:scala_library",
@@ -76,7 +76,7 @@ scala_import(
 scala_import(
     name = "circe_numbers",
     jars = [
-        "//external:jar/io/circe/circe_numbers_2_11"
+        "//external:jar/com_github_johnynek_bazel_deps_io/circe/circe_numbers_2_11"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/scala_lang:scala_library"

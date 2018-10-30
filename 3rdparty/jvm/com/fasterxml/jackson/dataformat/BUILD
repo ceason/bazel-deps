@@ -2,7 +2,7 @@ load("@io_bazel_rules_scala//scala:scala_import.bzl", "scala_import")
 java_library(
     name = "jackson_dataformat_yaml",
     exports = [
-        "//external:jar/com/fasterxml/jackson/dataformat/jackson_dataformat_yaml"
+        "//external:jar/com_github_johnynek_bazel_deps_com/fasterxml/jackson/dataformat/jackson_dataformat_yaml"
     ],
     runtime_deps = [
         "//3rdparty/jvm/com/fasterxml/jackson/core:jackson_core",

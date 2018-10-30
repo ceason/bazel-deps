@@ -2,7 +2,7 @@ load("@io_bazel_rules_scala//scala:scala_import.bzl", "scala_import")
 java_library(
     name = "maven_aether_provider",
     exports = [
-        "//external:jar/org/apache/maven/maven_aether_provider"
+        "//external:jar/com_github_johnynek_bazel_deps_org/apache/maven/maven_aether_provider"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/apache/commons:commons_lang3",
@@ -26,7 +26,7 @@ java_library(
 java_library(
     name = "maven_artifact",
     exports = [
-        "//external:jar/org/apache/maven/maven_artifact"
+        "//external:jar/com_github_johnynek_bazel_deps_org/apache/maven/maven_artifact"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/apache/commons:commons_lang3",
@@ -42,7 +42,7 @@ java_library(
 java_library(
     name = "maven_builder_support",
     exports = [
-        "//external:jar/org/apache/maven/maven_builder_support"
+        "//external:jar/com_github_johnynek_bazel_deps_org/apache/maven/maven_builder_support"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/apache/commons:commons_lang3",
@@ -58,7 +58,7 @@ java_library(
 java_library(
     name = "maven_model",
     exports = [
-        "//external:jar/org/apache/maven/maven_model"
+        "//external:jar/com_github_johnynek_bazel_deps_org/apache/maven/maven_model"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/apache/commons:commons_lang3",
@@ -74,7 +74,7 @@ java_library(
 java_library(
     name = "maven_model_builder",
     exports = [
-        "//external:jar/org/apache/maven/maven_model_builder"
+        "//external:jar/com_github_johnynek_bazel_deps_org/apache/maven/maven_model_builder"
     ],
     runtime_deps = [
         "//3rdparty/jvm/com/google/guava:guava",
@@ -96,7 +96,7 @@ java_library(
 java_library(
     name = "maven_repository_metadata",
     exports = [
-        "//external:jar/org/apache/maven/maven_repository_metadata"
+        "//external:jar/com_github_johnynek_bazel_deps_org/apache/maven/maven_repository_metadata"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/codehaus/plexus:plexus_utils"

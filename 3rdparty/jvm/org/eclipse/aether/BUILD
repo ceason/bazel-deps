@@ -2,7 +2,7 @@ load("@io_bazel_rules_scala//scala:scala_import.bzl", "scala_import")
 java_library(
     name = "aether_api",
     exports = [
-        "//external:jar/org/eclipse/aether/aether_api"
+        "//external:jar/com_github_johnynek_bazel_deps_org/eclipse/aether/aether_api"
     ],
     visibility = [
         "//visibility:public"
@@ -14,7 +14,7 @@ java_library(
 java_library(
     name = "aether_connector_basic",
     exports = [
-        "//external:jar/org/eclipse/aether/aether_connector_basic"
+        "//external:jar/com_github_johnynek_bazel_deps_org/eclipse/aether/aether_connector_basic"
     ],
     runtime_deps = [
         ":aether_api",
@@ -31,7 +31,7 @@ java_library(
 java_library(
     name = "aether_impl",
     exports = [
-        "//external:jar/org/eclipse/aether/aether_impl"
+        "//external:jar/com_github_johnynek_bazel_deps_org/eclipse/aether/aether_impl"
     ],
     runtime_deps = [
         ":aether_api",
@@ -48,7 +48,7 @@ java_library(
 java_library(
     name = "aether_spi",
     exports = [
-        "//external:jar/org/eclipse/aether/aether_spi"
+        "//external:jar/com_github_johnynek_bazel_deps_org/eclipse/aether/aether_spi"
     ],
     runtime_deps = [
         ":aether_api"
@@ -63,7 +63,7 @@ java_library(
 java_library(
     name = "aether_transport_file",
     exports = [
-        "//external:jar/org/eclipse/aether/aether_transport_file"
+        "//external:jar/com_github_johnynek_bazel_deps_org/eclipse/aether/aether_transport_file"
     ],
     runtime_deps = [
         ":aether_api",
@@ -80,7 +80,7 @@ java_library(
 java_library(
     name = "aether_transport_http",
     exports = [
-        "//external:jar/org/eclipse/aether/aether_transport_http"
+        "//external:jar/com_github_johnynek_bazel_deps_org/eclipse/aether/aether_transport_http"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/apache/httpcomponents:httpclient",
@@ -99,7 +99,7 @@ java_library(
 java_library(
     name = "aether_util",
     exports = [
-        "//external:jar/org/eclipse/aether/aether_util"
+        "//external:jar/com_github_johnynek_bazel_deps_org/eclipse/aether/aether_util"
     ],
     runtime_deps = [
         ":aether_api"

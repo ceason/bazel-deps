@@ -9,6 +9,7 @@ options:
   strictVisibility: true
   transitivity: runtime_deps
   versionConflictPolicy: highest
+  namePrefix: com_github_johnynek_bazel_deps_
 
 dependencies:
   com.chuusai:
