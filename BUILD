@@ -1,3 +1,14 @@
+exports_files(["launcher.sh.tpl"])
+
+load("//:def.bzl", "bazeldeps")
+
+bazeldeps(
+    name = "bazel-deps",
+    sha_file = "3rdparty/workspace.bzl",
+    deps_file = "dependencies.yaml",
+    default_command = "generate"
+)
+
 # Top level Bazel run alias for parseproject
 alias(
     name = "parse",
