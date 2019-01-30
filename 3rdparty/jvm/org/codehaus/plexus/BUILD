@@ -2,7 +2,7 @@ load("@io_bazel_rules_scala//scala:scala_import.bzl", "scala_import")
 java_library(
     name = "plexus_classworlds",
     exports = [
-        "//external:jar/org/codehaus/plexus/plexus_classworlds"
+        "//external:jar/com_github_johnynek_bazel_deps_org/codehaus/plexus/plexus_classworlds"
     ],
     visibility = [
         "//3rdparty/jvm:__subpackages__"
