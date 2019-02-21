@@ -10,20 +10,20 @@ def _impl(ctx):
 
     runfiles.append(ctx.file.deps_file)
     transitive_runfiles.append(ctx.attr._parseproject.default_runfiles.files)
-    transitive_runfiles.append(ctx.attr._parseproject.data_runfiles.files)
 
     ctx.actions.expand_template(
         template = ctx.file._launcher_template,
         output = ctx.outputs.executable,
         substitutions = {
             "%{deps_file}": ctx.file.deps_file.short_path,
-            "%{sha_file}": ctx.label.package + "/" + ctx.attr.sha_file,
+            "%{sha_file}": ctx.attr.sha_file,
             "%{default_command}": ctx.attr.default_command,
         },
         is_executable = True,
     )
 
     return [DefaultInfo(
+        executable = ctx.outputs.executable,
         runfiles = ctx.runfiles(
             files = runfiles,
             transitive_files = depset(transitive = transitive_runfiles),
@@ -31,7 +31,7 @@ def _impl(ctx):
     )]
 
 bazeldeps = rule(
-    implementation = _impl,
+    _impl,
     attrs = {
         "default_command": attr.string(
             default = "generate",
@@ -41,7 +41,7 @@ bazeldeps = rule(
             default = "3rdparty/workspace.bzl",
         ),
         "deps_file": attr.label(
-            default = "dependencies.yaml",
+            default = "//:dependencies.yaml",
             allow_single_file = [".yml", ".yaml", ".json"],
         ),
         "_parseproject": attr.label(
