@@ -12,14 +12,14 @@ class ParseTestCasesTest extends FunSuite {
       Map(
         MavenGroup("n2rr") ->
           Map(
-            ArtifactOrProject("zmup") -> ProjectRecord(Java,Some(Version("019")),Some(Set(Subproject("wcv"))),Some(Set((MavenGroup("j9szw4"),ArtifactOrProject("i")))),None,None)
+            ArtifactOrProject("zmup") -> ProjectRecord(Java,Some(Version("019")),Some(Set(Subproject("wcv"))),Some(Set((MavenGroup("j9szw4"),ArtifactOrProject("i")))),None,None,None)
           )
         )),Some(Replacements(Map())),None)
 
     law(model)
 
     val model1 = Model(Dependencies.empty,Some(Replacements.empty),Some(Options(None,None,None,None,None,Some(List()),
-      Some(ResolverCache.Local),Some(NamePrefix("y")), None, None, None)))
+      Some(ResolverCache.Local),Some(NamePrefix("y")), None, None, None, None)))
     //println(model1.toDoc.render(70))
     law(model1)
   }

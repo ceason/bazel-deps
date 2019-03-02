@@ -34,8 +34,6 @@ object Writer {
    */
   type BuildFileFormatter = ((IO.Path, String) => String)
 
-  private val buildFileName = "BUILD"
-
   private def buildFileContents(buildFilePath: IO.Path, buildHeader: String, ts: List[Target], formatter: BuildFileFormatter): String = {
     def withNewline(s: String): String =
       if (s.isEmpty) ""
@@ -46,7 +44,7 @@ object Writer {
       .mkString(withNewline(buildHeader), "\n\n", "\n"))
   }
 
-  def createBuildFiles(buildHeader: String, ts: List[Target], formatter: BuildFileFormatter): Result[Int] = {
+  def createBuildFiles(buildHeader: String, ts: List[Target], formatter: BuildFileFormatter, buildFileName: String): Result[Int] = {
     val pathGroups = ts.groupBy(_.name.path).toList
 
     Traverse[List].traverse(pathGroups) {
@@ -62,7 +60,7 @@ object Writer {
       .map(_.size)
   }
 
-  def compareBuildFiles(buildHeader: String, ts: List[Target], formatter: BuildFileFormatter): Result[List[IO.FileComparison]] = {
+  def compareBuildFiles(buildHeader: String, ts: List[Target], formatter: BuildFileFormatter, buildFileName: String): Result[List[IO.FileComparison]] = {
     val pathGroups = ts.groupBy(_.name.path).toList
 
     Traverse[List].traverse(pathGroups) {
@@ -319,10 +317,15 @@ object Writer {
                       kind = Target.Library,
                       name = Label.localTarget(pathInRoot, u, lang),
                       visibility = visibility(u),
-                      exports = (exports + lab) ++ uvexports,
+                      exports = if (u.artifact.packaging == "pom") {
+                          exports
+                      } else {
+                          (exports + lab)
+                      } ++ uvexports,
                       jars = Set.empty,
                       runtimeDeps = runtime_deps -- uvexports,
                       processorClasses = getProcessorClasses(u),
+                      generatesApi = getGeneratesApi(u),
                       licenses = licenses)
                   case Language.Kotlin =>
                     Target(lang,
@@ -332,7 +335,8 @@ object Writer {
                       exports = exports ++ uvexports,
                       jars = Set(lab),
                       runtimeDeps = runtime_deps -- uvexports,
-                      processorClasses = getProcessorClasses(u))
+                      processorClasses = getProcessorClasses(u),
+                      generatesApi = getGeneratesApi(u))
                   case _: Language.Scala =>
                     Target(lang,
                       kind = Target.Import,
@@ -342,6 +346,7 @@ object Writer {
                       jars = Set(lab),
                       runtimeDeps = runtime_deps -- uvexports,
                       processorClasses = getProcessorClasses(u),
+                      generatesApi = getGeneratesApi(u),
                       licenses = licenses)
                 }
               }
@@ -371,6 +376,12 @@ object Writer {
           m <- model.dependencies.toMap.get(u.group)
           projectRecord <- m.get(ArtifactOrProject(u.artifact.asString))
         } yield projectRecord.processorClasses).flatten.getOrElse(Set.empty)
+
+      def getGeneratesApi(u: UnversionedCoordinate): Boolean =
+        (for {
+          m <- model.dependencies.toMap.get(u.group)
+          projectRecord <- m.get(ArtifactOrProject(u.artifact.asString))
+        } yield projectRecord.generatesApi.getOrElse(false)).getOrElse(false)
 
       Traverse[List].traverse[E, UnversionedCoordinate, Target](allUnversioned.toList)(targetFor(_))
     }

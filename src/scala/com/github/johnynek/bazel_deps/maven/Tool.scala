@@ -169,6 +169,7 @@ object Tool {
             None,
             None,
             None,
+            None,
             None))
       }
       .toList
@@ -208,7 +209,7 @@ workspace(name = "$bazelName")
 
 git_repository(
   name = "io_bazel_rules_scala",
-  remote = "git://github.com/bazelbuild/rules_scala",
+  remote = "https://github.com/bazelbuild/rules_scala",
   commit = "73743b830ae98d13a946b25ad60cad5fee58e6d3",
 )
 
