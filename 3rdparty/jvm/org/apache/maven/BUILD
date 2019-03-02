@@ -111,7 +111,7 @@ java_library(
 java_library(
     name = "maven_settings",
     exports = [
-        "//external:jar/org/apache/maven/maven_settings"
+        "//external:jar/com_github_johnynek_bazel_deps_org/apache/maven/maven_settings"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/codehaus/plexus:plexus_utils"
@@ -126,7 +126,7 @@ java_library(
 java_library(
     name = "maven_settings_builder",
     exports = [
-        "//external:jar/org/apache/maven/maven_settings_builder"
+        "//external:jar/com_github_johnynek_bazel_deps_org/apache/maven/maven_settings_builder"
     ],
     runtime_deps = [
         "//3rdparty/jvm/org/apache/commons:commons_lang3",

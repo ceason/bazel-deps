@@ -2,7 +2,7 @@ load("@io_bazel_rules_scala//scala:scala_import.bzl", "scala_import")
 java_library(
     name = "cdi_api",
     exports = [
-        "//external:jar/javax/enterprise/cdi_api"
+        "//external:jar/com_github_johnynek_bazel_deps_javax/enterprise/cdi_api"
     ],
     runtime_deps = [
         "//3rdparty/jvm/javax/annotation:jsr250_api",
