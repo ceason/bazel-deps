@@ -72,6 +72,7 @@ case class Target(
   runtimeDeps: Set[Label] = Set.empty,
   processorClasses: Set[ProcessorClass] = Set.empty,
   generatesApi: Boolean = false,
+  tags: Set[String] = Set.empty,
   licenses: Set[String] = Set.empty) {
 
   def toDoc: Doc = {

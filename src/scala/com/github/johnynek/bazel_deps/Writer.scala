@@ -4,6 +4,7 @@ import cats.Traverse
 import cats.data.NonEmptyList
 import cats.implicits._
 import com.github.johnynek.bazel_deps.IO.{Path, Result}
+import com.github.johnynek.bazel_deps.Target.Kind
 import org.slf4j.LoggerFactory
 
 import scala.io.Source
@@ -139,7 +140,7 @@ object Writer {
         val actual = Label.externalJar(l, coord.unversioned, prefix)
         List(s"""$comment    {${kv("artifact", coord.asString)}""",
              s"""${kv("lang", l.asString)}$sha1Str$sha256Str$serverStr$remoteUrl$sourceStr""",
-             s"""${kv("name", coord.unversioned.toBazelRepoName(prefix))}""",
+             s"""${kv("name", coord.toBazelRepoName(prefix))}""",
              s"""${kv("actual", actual.fromRoot)}""",
              s"""${kv("bind", coord.unversioned.toBindingName(prefix))}},""").mkString(", ")
       }
@@ -304,10 +305,26 @@ object Writer {
               .right
               .map { uvexports =>
 
-                val (exports, runtime_deps) = model.getOptions.getTransitivity match {
-                  case Transitivity.Exports => (depLabels, Set.empty[Label])
-                  case Transitivity.RuntimeDeps => (Set.empty[Label], depLabels)
+                val (exports, runtime_deps, deps) = model.getOptions.getTransitivity match {
+                  case Transitivity.Exports => (depLabels, Set.empty[Label], Set.empty[Label])
+                  case Transitivity.RuntimeDeps => (Set.empty[Label], depLabels, Set.empty[Label])
+                  case Transitivity.Deps => (Set.empty[Label], Set.empty[Label], depLabels)
                 }
+
+                var tLang: Language = lang
+                var tKind: Kind = Target.Import
+                var tDeps: Set[Label] = deps
+                var tExports: Set[Label] = exports
+                var tJars: Set[Label] = Set(lab)
+                if (u.artifact.packaging == "pom") {
+                  tLang = Language.Java
+                  tKind = Target.Library
+                  tExports = exports ++ deps
+                  tDeps = Set.empty
+                  tJars = Set.empty
+                }
+
+
 
                 // TODO: converge on using java_import instead of java_library:
                 // https://github.com/johnynek/bazel-deps/issues/102
@@ -349,6 +366,18 @@ object Writer {
                       generatesApi = getGeneratesApi(u),
                       licenses = licenses)
                 }
+
+                Target(tLang,
+                  kind = tKind,
+                  name = Label.localTarget(pathInRoot, u, lang),
+                  visibility = visibility(u),
+                  exports = tExports ++ uvexports,
+                  jars = tJars,
+                  deps = tDeps,
+                  runtimeDeps = runtime_deps -- uvexports,
+                  processorClasses = getProcessorClasses(u),
+                  generatesApi = getGeneratesApi(u),
+                  licenses = licenses)
               }
           }
         }

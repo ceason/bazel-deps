@@ -422,12 +422,21 @@ object MavenArtifactId {
 
 case class MavenCoordinate(group: MavenGroup, artifact: MavenArtifactId, version: Version) {
   def unversioned: UnversionedCoordinate = UnversionedCoordinate(group, artifact)
-  def asString: String = s"${group.asString}:${artifact.asString}:${version.asString}"
+  def asString: String = s"${group.asString}:${artifact.asString}:${version.asString}".toLowerCase
 
   def toDependencies(l: Language): Dependencies =
     Dependencies(Map(group ->
       Map(ArtifactOrProject(artifact.asString) ->
         ProjectRecord(l, Some(version), None, None, None, None, None))))
+
+  def toBazelRepoName(namePrefix: NamePrefix): String =
+    s"${namePrefix.asString}$asString".map {
+      case '.' => "_"  // todo, we should have something such that if a != b this can't be equal, but this can
+      case '-' => "_"
+      case ':' => "_"
+      case other => other
+    }
+      .mkString
 }
 
 object MavenCoordinate {
@@ -1160,6 +1169,7 @@ sealed abstract class Transitivity(val asString: String)
 object Transitivity {
   case object RuntimeDeps extends Transitivity("runtime_deps")
   case object Exports extends Transitivity("exports")
+  case object Deps extends Transitivity("deps")
 
   implicit val transitivityMonoid: CommutativeMonoid[Transitivity] =
     new CommutativeMonoid[Transitivity] {

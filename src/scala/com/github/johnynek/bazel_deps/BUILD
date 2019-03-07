@@ -15,7 +15,7 @@ scala_library(name = "commands",
               srcs = ["Commands.scala"],
               deps = ["//3rdparty/jvm/com/monovore:decline", ":depsmodel"],
               exports = ["//3rdparty/jvm/com/monovore:decline", ":depsmodel"],
-              )
+              visibility = ["//visibility:public"])
 
 scala_library(name = "graph",
               srcs = ["Graph.scala"],

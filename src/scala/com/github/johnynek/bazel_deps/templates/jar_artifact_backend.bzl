@@ -27,12 +27,14 @@ java_import(
 )
 filegroup(
     name = 'file',
-    srcs = [
-        '{jar_name}',
-        '{src_name}'
-    ],
-    visibility = ['//visibility:public']
-)\n""".format(artifact = ctx.attr.artifact, jar_name = jar_name, src_name = src_name, srcjar_attr = srcjar_attr)
+    #srcs = ["{jar_name}"],
+    srcs = glob(["*.jar"]),
+)
+filegroup(
+    name = "sources",
+    srcs = glob(["*-sources.jar"]),
+)
+""".format(artifact = ctx.attr.artifact, jar_name = jar_name, src_name = src_name, srcjar_attr = srcjar_attr)
     ctx.file(ctx.path("jar/BUILD"), build_file_contents, False)
     return None
 
