@@ -26,10 +26,10 @@ object ResolvedGraph {
   def from(
     g: Graph[MavenCoordinate, Unit],
     duplicates: Map[UnversionedCoordinate, Set[Edge[MavenCoordinate, Unit]]],
-    shas: Option[Map[MavenCoordinate, ResolvedShasValue]],
+    shas: Map[MavenCoordinate, ResolvedShasValue],
     dependencies: Dependencies,
     replacements: Replacements
-  )(implicit opts: Options): Try[Iterable[ResolvedNode]] = Try {
+  ): Try[Iterable[ResolvedNode]] = Try {
     /**
       * Check that all the exports are well-defined
       * TODO make sure to write targets for replaced nodes
@@ -59,7 +59,7 @@ object ResolvedGraph {
           dependencies = new mutable.HashSet(),
           duplicates = duplicates.getOrElse(c.unversioned, Set.empty),
           projectRecord = r,
-          shas = shas.get(c)
+          shas = shas(c)
         )
         c -> resolved
       }.toMap

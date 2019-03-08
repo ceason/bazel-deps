@@ -2,12 +2,15 @@ package com.github.johnynek.bazel_deps
 
 import java.io.File
 import java.nio.file.{Path, Paths}
+
 import io.circe.jawn.JawnParser
 import org.slf4j.LoggerFactory
-import scala.sys.process.{ BasicIO, Process, ProcessIO }
-import scala.util.{ Failure, Success, Try }
+
+import scala.sys.process.{BasicIO, Process, ProcessIO}
+import scala.util.{Failure, Success, Try}
 import scala.collection.immutable.SortedMap
 import cats.implicits._
+import com.github.johnynek.bazel_deps.resolver.{ResolvedGraph, ResolvedNode, SingleFileWriter}
 
 object MakeDeps {
 
@@ -47,6 +50,14 @@ object MakeDeps {
             System.exit(-1)
             sys.error("exited already")
         }
+        implicit val opts = model.options
+        val resolvedGraph: Iterable[ResolvedNode] = ResolvedGraph.from(
+          normalized,
+          duplicates,
+          shas,
+          model.dependencies,
+          model.replacements.getOrElse(Replacements(Map.empty))
+        ).get
 
         val formatter: Writer.BuildFileFormatter = g.buildifier match {
           // If buildifier is provided, run it with the unformatted contents on its stdin; it will print the formatted
@@ -76,11 +87,19 @@ object MakeDeps {
         }
 
         // build the workspace
-        val ws = Writer.workspace(g.depsFile, normalized, duplicates, shas, model)
-        if (g.checkOnly) {
-          executeCheckOnly(model, projectRoot, IO.path(workspacePath), ws, targets, formatter)
-        } else {
-          executeGenerate(model, projectRoot, IO.path(workspacePath), ws, targets, formatter)
+        model.options.flatMap(_.outputFormat) match {
+          case Some("flatfile") =>
+            SingleFileWriter.executeGenerate(resolvedGraph)
+          case None =>
+            val ws = Writer.workspace(g.depsFile, normalized, duplicates, shas, model)
+            if (g.checkOnly) {
+              executeCheckOnly(model, projectRoot, IO.path(workspacePath), ws, targets, formatter)
+            } else {
+              executeGenerate(model, projectRoot, IO.path(workspacePath), ws, targets, formatter)
+            }
+          case Some(unknown) =>
+            System.err.println(s"Unknown output format '$unknown'")
+            System.exit(1)
         }
     }
   }

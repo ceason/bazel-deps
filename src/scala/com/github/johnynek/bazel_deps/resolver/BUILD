@@ -1,0 +1,21 @@
+scala_library(
+    name = "resolver",
+    #    srcs = ["ResolvedGraph.scala"],
+    srcs = glob(["*.scala"]),
+    visibility = ["//src:__subpackages__"],
+    deps = [
+        "//3rdparty/jvm/com/chuusai:shapeless",
+        "//3rdparty/jvm/com/monovore:decline",
+        "//3rdparty/jvm/io/circe:circe_generic",
+        "//3rdparty/jvm/org/typelevel:cats_core",
+        "//3rdparty/jvm/org/typelevel:cats_free",
+        "//3rdparty/jvm/org/typelevel:cats_kernel",
+        "//3rdparty/jvm/org/typelevel:macro_compat",
+        "//3rdparty/jvm/org/typelevel:paiges_core",
+        "//src/scala/com/github/johnynek/bazel_deps:commands",
+        "//src/scala/com/github/johnynek/bazel_deps:depsmodel",
+        "//src/scala/com/github/johnynek/bazel_deps:graph",
+        "//src/scala/com/github/johnynek/bazel_deps:io",
+        "//src/scala/com/github/johnynek/bazel_deps:writer",
+    ],
+)
