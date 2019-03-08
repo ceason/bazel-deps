@@ -47,8 +47,15 @@ object ResolvedGraph {
       sys.error(s"bad exports: ${badExports}")
     }
 
+    val replacementNodes: Map[UnversionedCoordinate, Replacement] =
+      replacements.unversionedToReplacementRecord.map {
+        case (k, v) => k -> Replacement(v, k)
+      }
+
     val resolvedNodes: Map[MavenCoordinate, ResolvedMavenCoordinate] =
-      g.nodes.map { c =>
+      g.nodes
+        .filterNot(c => replacementNodes.contains(c.unversioned))
+        .map { c =>
         val r: Option[ProjectRecord] = for {
           m <- dependencies.toMap.get(c.group)
           projectRecord <- m.get(ArtifactOrProject(c.artifact.asString))
@@ -63,11 +70,6 @@ object ResolvedGraph {
         )
         c -> resolved
       }.toMap
-
-    val replacementNodes: Map[UnversionedCoordinate, Replacement] =
-      replacements.unversionedToReplacementRecord.map {
-        case (k, v) => k -> Replacement(v, k)
-      }
 
     // Connect using edges
     for {
