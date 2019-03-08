@@ -27,7 +27,7 @@ object MakeDeps {
     }
 
     val parser = if (g.depsFile.endsWith(".json")) new JawnParser else Yaml
-    val model = Decoders.decodeModel(parser, content) match {
+    implicit val model: Model = Decoders.decodeModel(parser, content) match {
       case Right(m) => m
       case Left(err) =>
         logger.error(s"Failed to parse ${g.depsFile}.", err)
@@ -50,7 +50,6 @@ object MakeDeps {
             System.exit(-1)
             sys.error("exited already")
         }
-        implicit val opts = model.options
         val resolvedGraph: Iterable[ResolvedNode] = ResolvedGraph.from(
           normalized,
           duplicates,
