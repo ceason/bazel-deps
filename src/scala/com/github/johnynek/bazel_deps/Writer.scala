@@ -140,9 +140,9 @@ object Writer {
         val actual = Label.externalJar(l, coord.unversioned, prefix)
         List(s"""$comment    {${kv("artifact", coord.asString)}""",
              s"""${kv("lang", l.asString)}$sha1Str$sha256Str$serverStr$remoteUrl$sourceStr""",
-             s"""${kv("name", coord.toBazelRepoName(prefix))}""",
+             s"""${kv("name", coord.unversioned.toBazelRepoName(prefix))}""",
              s"""${kv("actual", actual.fromRoot)}""",
-             s"""${kv("bind", coord.unversioned.toBindingName(prefix))}},""").mkString(", ")
+            s"""${kv("bind", coord.unversioned.toBindingName(prefix))}},""").mkString(", ")
       }
       .mkString("\n")
 
@@ -202,7 +202,7 @@ object Writer {
      * Check that all the exports are well-defined
      * TODO make sure to write targets for replaced nodes
      */
-    val badExports =
+    val badExports: List[TargetsError.BadExport] =
       g.nodes.toList.flatMap { c =>
         val uv = c.unversioned
         model.dependencies.exportedUnversioned(uv, model.getReplacements) match {
@@ -211,7 +211,7 @@ object Writer {
         }
       }
 
-    val check = badExports match {
+    val check: Either[NonEmptyList[TargetsError.BadExport], Unit] = badExports match {
       case h :: tail => Left(NonEmptyList(h, tail))
       case Nil => Right(())
     }
@@ -412,7 +412,7 @@ object Writer {
           projectRecord <- m.get(ArtifactOrProject(u.artifact.asString))
         } yield projectRecord.generatesApi.getOrElse(false)).getOrElse(false)
 
-      Traverse[List].traverse[E, UnversionedCoordinate, Target](allUnversioned.toList)(targetFor(_))
+      Traverse[List].traverse[E, UnversionedCoordinate, Target](allUnversioned.toList)(targetFor)
     }
   }
 }

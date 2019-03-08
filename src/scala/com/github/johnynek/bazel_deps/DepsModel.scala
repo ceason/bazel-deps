@@ -422,21 +422,12 @@ object MavenArtifactId {
 
 case class MavenCoordinate(group: MavenGroup, artifact: MavenArtifactId, version: Version) {
   def unversioned: UnversionedCoordinate = UnversionedCoordinate(group, artifact)
-  def asString: String = s"${group.asString}:${artifact.asString}:${version.asString}".toLowerCase
+  def asString: String = s"${group.asString}:${artifact.asString}:${version.asString}"
 
   def toDependencies(l: Language): Dependencies =
     Dependencies(Map(group ->
       Map(ArtifactOrProject(artifact.asString) ->
         ProjectRecord(l, Some(version), None, None, None, None, None))))
-
-  def toBazelRepoName(namePrefix: NamePrefix): String =
-    s"${namePrefix.asString}$asString".map {
-      case '.' => "_"  // todo, we should have something such that if a != b this can't be equal, but this can
-      case '-' => "_"
-      case ':' => "_"
-      case other => other
-    }
-      .mkString
 }
 
 object MavenCoordinate {
