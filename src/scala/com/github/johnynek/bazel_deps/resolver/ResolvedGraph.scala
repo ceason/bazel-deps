@@ -1,6 +1,5 @@
 package com.github.johnynek.bazel_deps.resolver
 
-import cats.data.NonEmptyList
 import com.github.johnynek.bazel_deps.Writer.TargetsError
 import com.github.johnynek.bazel_deps._
 
@@ -16,10 +15,10 @@ case class Replacement(
 
 case class ResolvedMavenCoordinate(
   coord: MavenCoordinate,
-  dependencies: Set[ResolvedMavenCoordinate],
-  duplicates: Set[MavenCoordinate],
+  dependencies: mutable.Set[ResolvedNode],
+  duplicates: Set[Edge[MavenCoordinate, Unit]],
   shas: ResolvedShasValue,
-  processors: Set[ProcessorClass]
+  projectRecord: Option[ProjectRecord]
 ) extends ResolvedNode
 
 
@@ -27,10 +26,10 @@ object ResolvedGraph {
   def from(
     g: Graph[MavenCoordinate, Unit],
     duplicates: Map[UnversionedCoordinate, Set[Edge[MavenCoordinate, Unit]]],
-    shas: Map[MavenCoordinate, ResolvedShasValue],
+    shas: Option[Map[MavenCoordinate, ResolvedShasValue]],
     dependencies: Dependencies,
     replacements: Replacements
-  )(implicit opts: Options): Try[Seq[ResolvedNode]] = Try {
+  )(implicit opts: Options): Try[Iterable[ResolvedNode]] = Try {
     /**
       * Check that all the exports are well-defined
       * TODO make sure to write targets for replaced nodes
@@ -44,52 +43,52 @@ object ResolvedGraph {
         }
       }
 
-    val check: Either[NonEmptyList[TargetsError.BadExport], Unit] = badExports match {
-      case h :: tail => Left(NonEmptyList(h, tail))
-      case Nil => Right(())
+    if (badExports.nonEmpty) {
+      sys.error(s"bad exports: ${badExports}")
     }
 
-    type E[A] = Either[NonEmptyList[TargetsError], A]
-    check.right.flatMap { _ =>
-      /**
-        * Here are all the explicit artifacts
-        */
-      val uvToVerExplicit: Map[UnversionedCoordinate, MavenCoordinate] =
-        g.nodes.map { c => (c.unversioned, c) }.toMap
+    val resolvedNodes: Map[MavenCoordinate, ResolvedMavenCoordinate] =
+      g.nodes.map { c =>
+        val r: Option[ProjectRecord] = for {
+          m <- dependencies.toMap.get(c.group)
+          projectRecord <- m.get(ArtifactOrProject(c.artifact.asString))
+        } yield projectRecord
 
-      /**
-        * Here are any that are replaced, they may not appear above:
-        */
-      val uvToRep: Map[UnversionedCoordinate, ReplacementRecord] =
-        replacements.unversionedToReplacementRecord
+        val resolved = ResolvedMavenCoordinate(
+          coord = c,
+          dependencies = new mutable.HashSet(),
+          duplicates = duplicates.getOrElse(c.unversioned, Set.empty),
+          projectRecord = r,
+          shas = shas.get(c)
+        )
+        c -> resolved
+      }.toMap
 
-      /**
-        * Here are all the unversioned artifacts we need to create targets for:
-        */
-      val allUnversioned: Set[UnversionedCoordinate] =
-        uvToVerExplicit.keySet ++ uvToRep.keySet
+    val replacementNodes: Map[UnversionedCoordinate, Replacement] =
+      replacements.unversionedToReplacementRecord.map {
+        case (k, v) => k -> Replacement(v, k)
+      }
 
-      // return resolved or replaced nodes for all maven coords
-      val allResolved: List[ResolvedNode] =
-        allUnversioned.toList.map { uvCoord =>
-          if (uvToRep contains uvCoord)
-            Replacement(
-              actual = uvCoord,
-              replacement = uvToRep(uvCoord)
-            )
-          else
-            ResolvedMavenCoordinate(
-              coord = uvToVerExplicit(uvCoord),
-              dependencies = ???,
-              duplicates = ???,
-              shas = ???,
-              processors = ???
-            )
-        }
-      Right(allResolved)
-    }.fold(
-      ex => sys.error(s"failed with ${ex}"),
-      s => s
-    )
+    // Connect using edges
+    for {
+      (_, rc) <- resolvedNodes
+      edge <- g.edges.getOrElse(rc.coord, Set.empty)
+      if edge.source == rc.coord
+      dep = edge.destination
+    } {
+      if (replacementNodes contains dep.unversioned)
+        rc.dependencies += replacementNodes(dep.unversioned)
+      else
+        rc.dependencies += resolvedNodes(dep)
+    }
+
+    val allNodes: mutable.Map[UnversionedCoordinate, ResolvedNode] = mutable.Map()
+    allNodes ++= replacementNodes
+    for (coord <- resolvedNodes.values) {
+      if (!allNodes.contains(coord.coord.unversioned)) {
+        allNodes += (coord.coord.unversioned -> coord)
+      }
+    }
+    allNodes.values
   }
 }
