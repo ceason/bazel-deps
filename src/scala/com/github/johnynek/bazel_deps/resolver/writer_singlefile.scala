@@ -89,5 +89,19 @@ object SingleFileWriter {
       alias.mkString
   }
 
-  def lockfileFormat(n: ResolvedNode): String = ???
+  def lockfileFormat(n: ResolvedNode): String = {
+    /*
+    dict:
+    - rule_name
+    - name
+    - url
+    - sha256
+    - src_url
+    - src_sha256
+    - deps
+    - maven_coordinates
+     */
+
+    ???
+  }
 }
