@@ -14,7 +14,7 @@ object SingleFileWriter {
     System.err.println("It's doing stuff, WHEE!!")
     val nodelist = g.toList
 
-    val aliasFile: String = nodelist.map {
+    val aliasFile: String = s"package(default_visibility = ['//:__subpackages__'])\n\n" + nodelist.map {
       case r@Replacement(replacement, actual, pr) =>
         s"""alias(
            |    name = "${aliasName(actual)}",
