@@ -10,7 +10,9 @@ sealed trait ResolvedNode
 
 case class Replacement(
   replacement: ReplacementRecord,
-  actual: UnversionedCoordinate
+  actual: UnversionedCoordinate,
+  //replaced: Option[ResolvedMavenCoordinate],
+  projectRecord: Option[ProjectRecord]
 ) extends ResolvedNode
 
 case class ResolvedMavenCoordinate(
@@ -19,7 +21,23 @@ case class ResolvedMavenCoordinate(
   duplicates: Set[Edge[MavenCoordinate, Unit]],
   shas: ResolvedShasValue,
   projectRecord: Option[ProjectRecord]
-) extends ResolvedNode
+) extends ResolvedNode {
+
+  val language: Language = {
+    projectRecord
+      .map(_.lang)
+      .orElse {
+        val scalaBinaryVersion = ".*_(2\\.1[0-9])".r
+        coord.artifact.artifactId match {
+          case scalaBinaryVersion(v) ⇒
+            Some(Language.Scala(Version(v), mangle = false))
+          case _ ⇒
+            None
+        }
+      }.getOrElse(Language.Java)
+  }
+
+}
 
 
 object ResolvedGraph {
@@ -47,29 +65,35 @@ object ResolvedGraph {
       sys.error(s"bad exports: ${badExports}")
     }
 
-    val replacementNodes: Map[UnversionedCoordinate, Replacement] =
+    val replacementNodes: Map[UnversionedCoordinate, Replacement] = {
       replacements.unversionedToReplacementRecord.map {
-        case (k, v) => k -> Replacement(v, k)
+        case (k, v) =>
+          val r: Option[ProjectRecord] = for {
+            m <- dependencies.toMap.get(k.group)
+            projectRecord <- m.get(ArtifactOrProject(k.artifact.asString))
+          } yield projectRecord
+          k -> Replacement(v, k, r)
       }
+    }
 
     val resolvedNodes: Map[MavenCoordinate, ResolvedMavenCoordinate] =
       g.nodes
         .filterNot(c => replacementNodes.contains(c.unversioned))
         .map { c =>
-        val r: Option[ProjectRecord] = for {
-          m <- dependencies.toMap.get(c.group)
-          projectRecord <- m.get(ArtifactOrProject(c.artifact.asString))
-        } yield projectRecord
+          val r: Option[ProjectRecord] = for {
+            m <- dependencies.toMap.get(c.group)
+            projectRecord <- m.get(ArtifactOrProject(c.artifact.asString))
+          } yield projectRecord
 
-        val resolved = ResolvedMavenCoordinate(
-          coord = c,
-          dependencies = new mutable.HashSet(),
-          duplicates = duplicates.getOrElse(c.unversioned, Set.empty),
-          projectRecord = r,
-          shas = shas(c)
-        )
-        c -> resolved
-      }.toMap
+          val resolved = ResolvedMavenCoordinate(
+            coord = c,
+            dependencies = new mutable.HashSet(),
+            duplicates = duplicates.getOrElse(c.unversioned, Set.empty),
+            projectRecord = r,
+            shas = shas(c)
+          )
+          c -> resolved
+        }.toMap
 
     // Connect using edges
     for {
