@@ -162,7 +162,8 @@ scala_binary(name = "parseproject",
              ],
              resources = [
                  "templates/jar_artifact_backend.bzl",
-                 "templates/singlefile_lockfile.bzl"
+                 "templates/singlefile/lockfile.bzl",
+                 "templates/singlefile/internal.bzl",
              ],
              resource_strip_prefix = package_name() if repository_name() == "@" else "../%s/%s" % (repository_name()[1:], package_name()),
              main_class = "com.github.johnynek.bazel_deps.ParseProject",
