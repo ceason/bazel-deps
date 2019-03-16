@@ -88,7 +88,11 @@ object MakeDeps {
         // build the workspace
         model.options.flatMap(_.outputFormat) match {
           case Some("flatfile") =>
-            SingleFileWriter.executeGenerate(resolvedGraph)
+            val outputPath: String = Paths.get(
+              projectRoot.getAbsolutePath,
+              model.getOptions.getThirdPartyDirectory.asString
+            ).toAbsolutePath.toString
+            SingleFileWriter.executeGenerate(resolvedGraph, outputPath)
           case None =>
             val ws = Writer.workspace(g.depsFile, normalized, duplicates, shas, model)
             if (g.checkOnly) {

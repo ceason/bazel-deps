@@ -1,5 +1,8 @@
 package com.github.johnynek.bazel_deps.resolver
 
+import java.io.{BufferedWriter, File, FileWriter}
+import java.nio.file.{Files, Path, Paths}
+
 import com.github.johnynek.bazel_deps.{MavenCoordinate, Model, UnversionedCoordinate}
 
 import scala.collection.mutable
@@ -11,14 +14,13 @@ import scala.util.matching.Regex
   *
   */
 object SingleFileWriter {
-  def executeGenerate(g: Iterable[ResolvedNode])(implicit m: Model): Unit = {
-    System.err.println("It's doing stuff, WHEE!!")
+  def executeGenerate(g: Iterable[ResolvedNode], outputPath: String)(implicit m: Model): Unit = {
     val nodelist = g.toList
 
     val roots: Set[UnversionedCoordinate] =
       m.dependencies.roots.map(_.unversioned)
 
-    val aliasFile: String = {
+    val aliasFileContent: String = {
       val comments: Map[UnversionedCoordinate, String] =
         nodelist.collect {
           case r@ResolvedMavenCoordinate(coord, dependencies, duplicates, shas, projectRecord) =>
@@ -50,7 +52,7 @@ object SingleFileWriter {
       }.mkString("\n\n") + "\n"
     }
 
-    val lockfile: String = {
+    val lockfileContent: String = {
       val template = Source.fromInputStream(getClass.getResource(
         "/templates/singlefile/lockfile.bzl").openStream()).mkString
 
@@ -103,9 +105,15 @@ object SingleFileWriter {
        """.stripMargin + s"\n$template\n"
     }
 
-    //println(nodelist)
-    print(aliasFile)
-    print(lockfile)
+    val aliasFile = Paths.get(outputPath, "BUILD")
+    val libFile = Paths.get(outputPath, "internal.bzl")
+    val lockfile = Paths.get(outputPath, "lockfile.bzl")
+
+    writeFile(libFile.toString, Source.fromInputStream(getClass.getResource(
+      "/templates/singlefile/internal.bzl").openStream()).mkString)
+    writeFile(lockfile.toString, lockfileContent)
+    writeFile(aliasFile.toString, aliasFileContent)
+
     println(s"Number of nodes is '${nodelist.length}'")
   }
 
@@ -172,4 +180,18 @@ object SingleFileWriter {
     }
   }
 
+
+  def writeFile(path: String, content: String): Unit = {
+    // if file exists at path, read it in and compare content
+    if (Files.exists(Paths.get(path))) {
+      if (Source.fromFile(path).mkString == content) {
+        // if file is identical don't do anything
+        return
+      }
+    }
+    val file = new File(path)
+    val bw = new BufferedWriter(new FileWriter(file))
+    bw.write(content)
+    bw.close()
+  }
 }
