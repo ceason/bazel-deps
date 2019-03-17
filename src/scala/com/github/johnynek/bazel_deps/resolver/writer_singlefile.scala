@@ -107,7 +107,7 @@ object SingleFileWriter {
 
     val aliasFile = Paths.get(outputPath, "BUILD")
     val libFile = Paths.get(outputPath, "internal.bzl")
-    val lockfile = Paths.get(outputPath, "lockfile.bzl")
+    val lockfile = Paths.get(outputPath, "dependencies.bzl")
 
     new File(outputPath).mkdirs()
     writeFile(libFile.toString, Source.fromInputStream(getClass.getResource(
