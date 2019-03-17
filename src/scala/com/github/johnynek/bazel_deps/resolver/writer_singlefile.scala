@@ -1,7 +1,7 @@
 package com.github.johnynek.bazel_deps.resolver
 
 import java.io.{BufferedWriter, File, FileWriter}
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Paths}
 
 import com.github.johnynek.bazel_deps.{MavenCoordinate, Model, UnversionedCoordinate}
 
@@ -59,6 +59,7 @@ object SingleFileWriter {
       val lines = nodelist.collect {
         case r@ResolvedMavenCoordinate(coord, dependencies, duplicates, shas, pr) ⇒
           val p = new mutable.ArrayBuffer[(String, Any)]
+          p += ("name" → repositoryName(coord.unversioned))
           p += ("artifact" → coord.asString)
           for (sha ← shas.binaryJar.sha256) {
             p += ("sha256" → sha.toHex)
@@ -68,17 +69,16 @@ object SingleFileWriter {
               p += ("sha256_src" → sha.toHex)
             }
           }
-          val deps: List[String] = dependencies.toList.collect {
-            case r@ResolvedMavenCoordinate(coord, dependencies, duplicates, shas, projectRecord) ⇒
-              s"@${repositoryName(coord.unversioned)}"
-            case r@Replacement(replacement, actual, projectRecord) ⇒
-              replacement.target.asString
+          val deps: List[String] = dependencies.toList.map {
+            case r: ResolvedMavenCoordinate ⇒
+              s"@${repositoryName(r.coord.unversioned)}"
+            case r: Replacement ⇒
+              s"@${repositoryName(r.actual)}"
           }.sorted
           if (deps.nonEmpty) {
             p += ("deps" → deps)
           }
-
-          s"""'${repositoryName(coord.unversioned)}': {\n        ${
+          s"""'${withoutAnyVersions(coord.unversioned)}': {\n        ${
             p.map {
               case (k, v: String) ⇒
                 s"'$k': '$v'"
@@ -101,8 +101,7 @@ object SingleFileWriter {
          |}
          |_DEPENDENCIES = {
          |    ${lines.mkString("\n    ")}
-         |}
-       """.stripMargin + s"\n$template\n"
+         |}""".stripMargin + s"\n$template\n"
     }
 
     val aliasFile = Paths.get(outputPath, "BUILD")
@@ -112,7 +111,7 @@ object SingleFileWriter {
     new File(outputPath).mkdirs()
     writeFile(libFile.toString, Source.fromInputStream(getClass.getResource(
       "/templates/singlefile/internal.bzl").openStream()).mkString
-    .replace("%{output_path}", m.getOptions.getThirdPartyDirectory.asString))
+      .replace("%{output_path}", m.getOptions.getThirdPartyDirectory.asString))
     writeFile(lockfile.toString, lockfileContent)
     writeFile(aliasFile.toString, aliasFileContent)
 
@@ -121,28 +120,31 @@ object SingleFileWriter {
 
   val ScalaArtifactId: Regex = "(.*)_(2\\.1[0-9])".r
 
-  def repositoryName(r: UnversionedCoordinate)(implicit m: Model): String = {
+  /// remove even scala binary version
+  def withoutAnyVersions(r: UnversionedCoordinate): String = {
+    val sb = new mutable.StringBuilder
     val artifactId = r.artifact.artifactId match {
       case ScalaArtifactId(artifact, scalaBinaryVersion) ⇒
         artifact
       case other ⇒
         other
     }
-    val s = new StringBuilder
-    for (prefix <- m.options.flatMap(_.namePrefix)) {
-      s ++= s"${
-        prefix.asString
-      }"
+    sb ++= s"${r.group.asString}:$artifactId"
+    if (r.artifact.packaging != "jar" || r.artifact.classifier.nonEmpty) {
+      sb ++= ":" + r.artifact.packaging
     }
-    s ++= s"${
-      r.group.asString
-    }_$artifactId"
-    for (classifier <- r.artifact.classifier.filterNot(_ == "jar")) {
-      s ++= s"_$classifier"
+    for (classifier ← r.artifact.classifier) {
+      sb ++= ":" + classifier
     }
-    s.mkString
+    sb.mkString
+  }
+
+  def repositoryName(r: UnversionedCoordinate)(implicit m: Model): String = {
+    val name = withoutAnyVersions(r)
       .replace(".", "_")
       .replace("-", "_")
+      .replace(":", "_")
+    m.getOptions.getNamePrefix.asString + name
   }
 
   def aliasName(c: UnversionedCoordinate)(implicit m: Model): String = {
