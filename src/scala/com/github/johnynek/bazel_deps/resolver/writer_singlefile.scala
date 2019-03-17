@@ -109,8 +109,10 @@ object SingleFileWriter {
     val libFile = Paths.get(outputPath, "internal.bzl")
     val lockfile = Paths.get(outputPath, "lockfile.bzl")
 
+    new File(outputPath).mkdirs()
     writeFile(libFile.toString, Source.fromInputStream(getClass.getResource(
-      "/templates/singlefile/internal.bzl").openStream()).mkString)
+      "/templates/singlefile/internal.bzl").openStream()).mkString
+    .replace("%{output_path}", m.getOptions.getThirdPartyDirectory.asString))
     writeFile(lockfile.toString, lockfileContent)
     writeFile(aliasFile.toString, aliasFileContent)
 

@@ -52,7 +52,7 @@ def _jarimport_buildfile_content(
         deps = None,
         artifact = None):
     return """
-load(":internal.bzl", "java_import")
+load("{internal_lib}", "java_import")
 package(default_visibility = ["//visibility:public"])
 
 java_import(
@@ -65,6 +65,7 @@ java_import(
     ],
 )
 """.format(
+        internal_lib = internal_lib,
         name = '"%s"' % name,
         jar = '"%s"' % jar,
         srcjar = '"%s"' % srcjar if srcjar else "None",
@@ -87,7 +88,6 @@ java_library(
 )
 """.format(
         name = '"%s"' % name,
-        artifact = artifact,
         exports = "\n        " + "\n        ".join([
             '"%s",' % d
             for d in exports
@@ -161,60 +161,12 @@ def _decode_maven_coordinates(artifact, default_packaging = "jar"):
 def _should_fetch_sources_in_current_env(repository_ctx):
     return repository_ctx.os.environ.get(_FETCH_SOURCES_ENV_VAR, "true").lower() == "true"
 
-def _serialize_rule_import(import_attr, name, path, srcpath, attrs, props, additional_rule_attrs):
-    lines = [
-        "%s(" % rule_name,
-        "    name = %s," % repr(name),
-        "    " + import_attr % repr(path) + ",",
-    ]
-    if srcpath:
-        lines.append("    srcjar = %s," % repr(srcpath))
-    for prop in props:
-        value = getattr(attrs, prop, None)
-        if value:
-            if prop.endswith("_"):
-                prop = prop[:-1]
-            lines.append("    %s = %s," % (prop, repr(value)))
-    for attr_key in additional_rule_attrs:
-        lines.append("    %s = %s," % (attr_key, additional_rule_attrs[attr_key]))
-    lines.append(")")
-    lines.append("")
-    return lines
-
 def _maven_artifact_impl(ctx):
-    # check inputs are valid (and disjoint where applicable)
-    if (ctx.attr.sha1 or ctx.attr.sha1_src) and (ctx.attr.sha256 or ctx.attr.sha256_src):
-        fail("May only specify 'sha1[_src]' or 'sha256[_src]' but not both")
+    # TODO: check inputs are valid (and disjoint where applicable)
 
     # repository name
     name = ctx.attr.name
     coord = _decode_maven_coordinates(ctx.attr.artifact)
-
-    # maybe download jars
-    srcjar = None
-    jar = None
-    if ctx.attr.sha256_src and _should_fetch_sources_in_current_env(ctx):
-        srcjar = _download_artifact(
-            ctx,
-            server_urls = ctx.attr.repositories,
-            sha256 = ctx.attr.sha256_src,
-            group_id = coord.group_id,
-            artifact_id = coord.artifact_id,
-            version = coord.version,
-            packaging = coord.packaging,
-            classifier = "sources",
-        )
-    if ctx.attr.sha256:
-        jar = _download_artifact(
-            ctx,
-            server_urls = ctx.attr.repositories,
-            sha256 = ctx.attr.sha256_src,
-            group_id = coord.group_id,
-            artifact_id = coord.artifact_id,
-            version = coord.version,
-            packaging = coord.packaging,
-            classifier = coord.classifier,
-        )
 
     if ctx.attr.replacement:
         # is it replacement (replacement attr)
@@ -222,24 +174,46 @@ def _maven_artifact_impl(ctx):
             name = name,
             replacement = ctx.attr.replacement,
         ))
-    elif not ctx.attr.sha256:
+    elif coord.packaging == "pom":
         # is it something to just 'export' (pom packaging, no jars)
         ctx.file("BUILD", _pompkg_buildfile_content(
             name = name,
             exports = ctx.attr.exports,
         ))
-    else:
-        # is it import jar (maybe with deps)?
-        internal_lib_path = ctx.path(Label(":internal.bzl"))
-        ctx.symlink(Label(":internal.bzl"), "internal.bzl")
+    elif coord.packaging == "jar":
+        srcjar = None
+        if ctx.attr.sha256_src and _should_fetch_sources_in_current_env(ctx):
+            srcjar = _download_artifact(
+                ctx,
+                server_urls = ctx.attr.repositories,
+                sha256 = ctx.attr.sha256_src,
+                group_id = coord.group_id,
+                artifact_id = coord.artifact_id,
+                version = coord.version,
+                packaging = coord.packaging,
+                classifier = "sources",
+            )
+        jar = _download_artifact(
+            ctx,
+            server_urls = ctx.attr.repositories,
+            sha256 = ctx.attr.sha256,
+            group_id = coord.group_id,
+            artifact_id = coord.artifact_id,
+            version = coord.version,
+            packaging = coord.packaging,
+            classifier = coord.classifier,
+        )
+        ctx.symlink(ctx.attr._internal_lib, "internal.bzl")
         ctx.file("BUILD", _jarimport_buildfile_content(
-            internal_lib = None,
+            internal_lib = ":internal.bzl",
             name = name,
             jar = jar,
             srcjar = srcjar,
             deps = ctx.attr.deps,
             artifact = ctx.attr.artifact,
         ))
+    else:
+        fail("Unsupported packaging '%s' (expected 'pom' or 'jar')" % coord.packaging, attr="artifact")
 
     # the coord's packaging is also an alias, to mimic behavior of native.maven_jar
     ctx.file("%s/BUILD" % coord.packaging, "\n".join([
@@ -263,6 +237,10 @@ maven_artifact = repository_rule(
         "repositories": attr.string_list(doc = "Resolver URLs"),
         "sha256": attr.string(),
         "sha256_src": attr.string(),
+        "_internal_lib": attr.label(
+            default = "//%{output_path}:internal.bzl",
+            allow_single_file = [".bzl"],
+        ),
     },
     environ = [_FETCH_SOURCES_ENV_VAR],
 )
