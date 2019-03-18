@@ -77,7 +77,6 @@ def _maven_artifact_impl(ctx):
 
     # repository name
     name = ctx.attr.name
-    coord = _decode_maven_coordinates(ctx.attr.artifact)
 
     buildfile_lines = [
         _HEADER,
@@ -93,26 +92,28 @@ alias(
             name = name,
             actual = ctx.attr.replacement,
         )]
-    elif coord.packaging == "pom":
-        # is it something to just 'export' (pom packaging, no jars)
-        buildfile_lines += ["""
+    else:
+        coord = _decode_maven_coordinates(ctx.attr.artifact)
+        if coord.packaging == "pom":
+            # is it something to just 'export' (pom packaging, no jars)
+            buildfile_lines += ["""
 java_library(
     name = "{name}",
     exports = [{exports}],
 )""".format(
-            name = name,
-            exports = "\n        " + "\n        ".join([
-                '"%s",' % d
-                for d in sorted(ctx.attr.deps)
-            ]),
-        )]
-    elif coord.packaging == "jar":
-        srcjar = None
-        if ctx.attr.sha256_src and ctx.os.environ.get(_FETCH_SOURCES_ENV_VAR, "true").lower() == "true":
-            srcjar = _download_artifact(ctx, ctx.attr.sha256_src, classifier = "sources")
-        jar = _download_artifact(ctx, ctx.attr.sha256)
-        ctx.symlink(ctx.attr._internal_lib, "internal.bzl")
-        buildfile_lines += ["""
+                name = name,
+                exports = "\n        " + "\n        ".join([
+                    '"%s",' % d
+                    for d in sorted(ctx.attr.deps)
+                ]),
+            )]
+        elif coord.packaging == "jar":
+            srcjar = None
+            if ctx.attr.sha256_src and ctx.os.environ.get(_FETCH_SOURCES_ENV_VAR, "true").lower() == "true":
+                srcjar = _download_artifact(ctx, ctx.attr.sha256_src, classifier = "sources")
+            jar = _download_artifact(ctx, ctx.attr.sha256)
+            ctx.symlink(ctx.attr._internal_lib, "internal.bzl")
+            buildfile_lines += ["""
 load(":internal.bzl", "java_import")
 
 java_import(
@@ -122,27 +123,27 @@ java_import(
     tags = ["maven_coordinates={artifact}"],
     deps = [{deps}],
 )""".format(
-            name = name,
-            jar = jar,
-            srcjar = '"%s"' % srcjar if srcjar else "None",
-            artifact = ctx.attr.artifact,
-            deps = "\n        " + "\n        ".join([
-                '"%s",' % d
-                for d in sorted(ctx.attr.deps)
-            ]),
-        )]
-    else:
-        fail("Unsupported packaging '%s' (expected 'pom' or 'jar')" % coord.packaging, attr = "artifact")
+                name = name,
+                jar = jar,
+                srcjar = '"%s"' % srcjar if srcjar else "None",
+                artifact = ctx.attr.artifact,
+                deps = "\n        " + "\n        ".join([
+                    '"%s",' % d
+                    for d in sorted(ctx.attr.deps)
+                ]),
+            )]
+        else:
+            fail("Unsupported packaging '%s' (expected 'pom' or 'jar')" % coord.packaging, attr = "artifact")
 
     ctx.file("BUILD", "\n".join(buildfile_lines))
 
     # the coord's packaging is also an alias, to mimic behavior of native.maven_jar
-    ctx.file("%s/BUILD" % coord.packaging, "\n".join([
+    ctx.file("%s/BUILD" % "jar", "\n".join([
         "",
         """package(default_visibility = ["//visibility:public"])""",
         "",
         "alias(",
-        "    name = \"%s\"," % coord.packaging,
+        "    name = \"%s\"," % "jar",
         "    actual = \"@%s\"," % name,
         ")",
         "",

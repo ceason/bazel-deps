@@ -44,9 +44,9 @@ object SingleFileWriter {
           alias ++= s"$comment\n"
         }
         alias ++=
-          s"""alias(
+          s"""java_library(
              |    name = "${aliasName(coord)}",
-             |    actual = "@${repositoryName(coord)}",
+             |    exports = ["@${repositoryName(coord)}"],
              |)""".stripMargin
         alias.mkString
       }.mkString("\n\n") + "\n"
