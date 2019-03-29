@@ -44,9 +44,9 @@ object SingleFileWriter {
           alias ++= s"$comment\n"
         }
         alias ++=
-          s"""java_library(
+          s"""alias(
              |    name = "${aliasName(coord)}",
-             |    exports = ["@${repositoryName(coord)}"],
+             |    actual = "@${repositoryName(coord)}",
              |)""".stripMargin
         alias.mkString
       }.mkString("\n\n") + "\n"
@@ -54,7 +54,7 @@ object SingleFileWriter {
 
     val lockfileContent: String = {
       val template = Source.fromInputStream(getClass.getResource(
-        "/templates/singlefile/lockfile.bzl").openStream()).mkString
+        "/templates/singlefile_backend.bzl").openStream()).mkString
 
       val lines = nodelist.collect {
         case r@ResolvedMavenCoordinate(coord, dependencies, duplicates, shas, pr) ⇒
@@ -105,13 +105,9 @@ object SingleFileWriter {
     }
 
     val aliasFile = Paths.get(outputPath, "BUILD")
-    val libFile = Paths.get(outputPath, "internal.bzl")
     val lockfile = Paths.get(outputPath, "dependencies.bzl")
 
     new File(outputPath).mkdirs()
-    writeFile(libFile.toString, Source.fromInputStream(getClass.getResource(
-      "/templates/singlefile/internal.bzl").openStream()).mkString
-      .replace("%{output_path}", m.getOptions.getThirdPartyDirectory.asString))
     writeFile(lockfile.toString, lockfileContent)
     writeFile(aliasFile.toString, aliasFileContent)
 
