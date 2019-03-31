@@ -6,13 +6,26 @@ def _jvm_import_impl(ctx):
     if len(ctx.files.jars) != 1:
         fail("Must specify exactly one jar", attr = "jars")
     jar = ctx.files.jars[0]
+    compile_jar = ctx.actions.declare_file("%s-stamped.jar" % jar.basename[:-len(".jar")])
+    ctx.actions.run(
+        inputs = [jar],
+        outputs = [compile_jar],
+        executable = ctx.executable._singlejar,
+        arguments = [
+            "--sources", jar.path,
+            "--output", compile_jar.path,
+            "--deploy_manifest_lines", "Target-Label: %s" % ctx.attr.jar_stamp,
+            "--normalize",
+            "--exclude_build_data",
+        ],
+    )
     return [
         DefaultInfo(
             files = depset(direct = [jar]),
         ),
         JavaInfo(
             output_jar = jar,
-            compile_jar = java_common.stamp_jar(ctx.actions, jar = jar, target_label = ctx.label, java_toolchain = ctx.attr._java_toolchain),
+            compile_jar = compile_jar,
             source_jar = getattr(ctx.file, "srcjar", None),
             deps = [d[JavaInfo] for d in getattr(ctx.attr, "deps", [])],
         ),
@@ -23,8 +36,14 @@ jvm_import = rule(
     attrs = {
         "jars": attr.label_list(allow_files = [".jar"]),
         "deps": attr.label_list(providers = [JavaInfo]),
+        "jar_stamp": attr.string(),
         "srcjar": attr.label(allow_single_file = ["-sources.jar"]),
-        "_java_toolchain": attr.label(default = Label("@bazel_tools//tools/jdk:current_java_toolchain")),
+        "_singlejar": attr.label(
+            executable = True,
+            cfg = "host",
+            default = Label("@bazel_tools//tools/jdk:singlejar"),
+            allow_files = True,
+        ),
     },
 )
 """
@@ -74,11 +93,17 @@ def _decode_maven_coordinates(artifact, default_packaging = "jar"):
         packaging = packaging,
     )
 
+def _serialize_list(items):
+    return "\n        " + "    ".join([
+        '"%s",\n    ' % i
+        for i in items or []
+    ])
+
 def _maven_artifact_impl(ctx):
     # TODO: check inputs are valid (and disjoint where applicable)
 
-    # repository name
     name = ctx.attr.name
+    tags = getattr(ctx.attr, "tags", [])
 
     buildfile_lines = [
         _HEADER,
@@ -102,12 +127,11 @@ alias(
 java_library(
     name = "{name}",
     exports = [{exports}],
+    tags = [{tags}],
 )""".format(
                 name = name,
-                exports = "\n        " + "    ".join([
-                    '"%s",\n    ' % d
-                    for d in sorted(ctx.attr.deps)
-                ]),
+                exports = _serialize_list(ctx.attr.deps),
+                tags = _serialize_list(tags),
             )]
         elif coord.packaging == "jar":
             srcjar = None
@@ -122,16 +146,17 @@ jvm_import(
     name = "{name}",
     jars = ["{jar}"],
     srcjar = {srcjar},
-    tags = ["maven_coordinates={artifact}"],
+    jar_stamp = "{jar_stamp}",
+    tags = [{tags}],
     deps = [{deps}],
 )""".format(
                 name = name,
                 jar = jar,
                 srcjar = '"%s"' % srcjar if srcjar else "None",
-                artifact = ctx.attr.artifact,
-                deps = "\n        " + "    ".join([
-                    '"%s",\n    ' % d
-                    for d in sorted(ctx.attr.deps)
+                jar_stamp = ctx.attr.jar_stamp,
+                deps = _serialize_list(ctx.attr.deps),
+                tags = _serialize_list(tags + [
+                    "maven_coordinates=%s" % ctx.attr.artifact,
                 ]),
             )]
         else:
@@ -157,6 +182,7 @@ _maven_artifact = repository_rule(
     attrs = {
         "replacement": attr.string(),
         "artifact": attr.string(),
+        "jar_stamp": attr.string(),
         "deps": attr.string_list(),
         "exports": attr.string_list(),
         "repositories": attr.string_list(doc = "Resolver URLs"),
@@ -167,30 +193,19 @@ _maven_artifact = repository_rule(
 )
 
 def maven_dependencies(
-        # 'mvn_coord' => 'label' mapping
-        replacements = {},
         # '@repository' (or '//external:targetname') => 'mvn_coord' mapping
         aliases = {}):
-
     dependencies = _DEPENDENCIES
-    repositories = _REPOSITORIES
-
-    m2_repos = sorted(repositories.values())
+    m2_repos = _REPOSITORIES.values()
 
     # print warnings
     missing_alias_coords = {c: None for c in aliases.values() if c not in dependencies}.keys()
-    missing_replacement_coords = [c for c in replacements.keys() if c not in dependencies]
     if missing_alias_coords:
-        print("\nWARN the following aliases were ignored because they're not listed in dependencies:\n  %s" %
+        print("\nWARN the following aliases might not work because they're not listed in dependencies:\n  %s" %
               "\n  ".join(sorted(missing_alias_coords)))
-    if missing_replacement_coords:
-        print("\nWARN the following replacements were ignored because they're not listed in dependencies:\n  %s" %
-              "\n  ".join(sorted(missing_replacement_coords)))
 
     # do aliases, checking if the alias is a <repoName> or a <bind>
     for name, unversioned_coord in aliases.items():
-        if unversioned_coord not in dependencies:
-            continue
         actual = "@%s" % dependencies[unversioned_coord]["name"]
         if name.startswith("@"):
             name = name[len("@"):]
@@ -201,10 +216,7 @@ def maven_dependencies(
         else:
             fail("Bad alias name '%s'. Wanted a bare repository name (eg '@repo_name') or bind target (eg '//external:some/target_name')", attr = "aliases")
 
-    # do dependencies, swapping in replacements as appropriate
+    # do dependencies
     for k, kwargs in dependencies.items():
-        if k in replacements:
-            _maven_artifact(name = kwargs["name"], replacement = replacements[k])
-        else:
-            _maven_artifact(repositories = m2_repos, **kwargs)
+        _maven_artifact(repositories = m2_repos, **kwargs)
     return

@@ -14,6 +14,7 @@ import scala.util.matching.Regex
   *
   */
 object SingleFileWriter {
+
   def executeGenerate(g: Iterable[ResolvedNode], outputPath: String)(implicit m: Model): Unit = {
     val nodelist = g.toList
 
@@ -23,6 +24,8 @@ object SingleFileWriter {
     val aliasFileContent: String = {
       val comments: Map[UnversionedCoordinate, String] =
         nodelist.collect {
+          case r@Replacement(replacement, actual, projectRecord) ⇒
+            actual → s"# ${replacement.target.asString}"
           case r@ResolvedMavenCoordinate(coord, dependencies, duplicates, shas, projectRecord) =>
             coord.unversioned → duplicatesComment(r)
         }.toMap
@@ -32,23 +35,23 @@ object SingleFileWriter {
           actual
         case r@ResolvedMavenCoordinate(coord, dependencies, duplicates, shas, projectRecord) =>
           coord.unversioned
-      }.filter { coord ⇒
-        // only include root nodes when 'strict visibility' is enabled
-        if (m.getOptions.strictVisibility.exists(_.enabled))
-          roots.contains(coord)
-        else
-          true
-      }.map { coord ⇒
-        val alias = new StringBuilder
+      }.sortBy(_.asString).map { coord ⇒
+        val alias = new mutable.ArrayBuffer[String]()
         for (comment ← comments.get(coord)) {
-          alias ++= s"$comment\n"
+          alias += comment
         }
-        alias ++=
+        alias +=
           s"""alias(
              |    name = "${aliasName(coord)}",
-             |    actual = "@${repositoryName(coord)}",
-             |)""".stripMargin
-        alias.mkString
+             |    actual = "@${repositoryName(coord)}",""".stripMargin
+        if (!roots.contains(coord)) {
+          alias += """    tags = ["no-ide"],"""
+        }
+        if (m.getOptions.strictVisibility.exists(_.enabled) && !roots.contains(coord)) {
+          alias += """    visibility = ["//visibility:private"],"""
+        }
+        alias += ")"
+        alias.mkString("\n")
       }.mkString("\n\n") + "\n"
     }
 
@@ -56,39 +59,54 @@ object SingleFileWriter {
       val template = Source.fromInputStream(getClass.getResource(
         "/templates/singlefile_backend.bzl").openStream()).mkString
 
-      val lines = nodelist.collect {
-        case r@ResolvedMavenCoordinate(coord, dependencies, duplicates, shas, pr) ⇒
-          val p = new mutable.ArrayBuffer[(String, Any)]
-          p += ("name" → repositoryName(coord.unversioned))
-          p += ("artifact" → coord.asString)
-          for (sha ← shas.binaryJar.sha256) {
-            p += ("sha256" → sha.toHex)
-          }
-          for (source ← shas.sourceJar) {
-            for (sha ← source.sha256) {
-              p += ("sha256_src" → sha.toHex)
+      val lines = nodelist.map { r ⇒
+        val p = new mutable.ArrayBuffer[(String, Any)]
+        p += ("name" → repositoryName(r.unversionedCoord))
+        var tags: mutable.ListBuffer[String] = new mutable.ListBuffer[String]
+        if (!roots.contains(r.unversionedCoord)) {
+          tags += "no-ide"
+        }
+        r match {
+          case Replacement(replacement, actual, projectRecord) ⇒
+            p += ("replacement" → replacement.target.asString)
+          case ResolvedMavenCoordinate(coord, dependencies, duplicates, shas, pr) ⇒
+            p += ("artifact" → coord.asString)
+            if (coord.artifact.packaging != "pom") {
+              p += ("jar_stamp" → s"//${m.getOptions.getThirdPartyDirectory.asString}:${aliasName(r.unversionedCoord)}")
+              for (sha ← shas.binaryJar.sha256) {
+                p += ("sha256" → sha.toHex)
+              }
+              for (source ← shas.sourceJar) {
+                for (sha ← source.sha256) {
+                  p += ("sha256_src" → sha.toHex)
+                }
+              }
             }
-          }
-          val deps: List[String] = dependencies.toList.map {
-            case r: ResolvedMavenCoordinate ⇒
-              s"@${repositoryName(r.coord.unversioned)}"
-            case r: Replacement ⇒
-              s"@${repositoryName(r.actual)}"
-          }.sorted
-          if (deps.nonEmpty) {
-            p += ("deps" → deps)
-          }
-          s"""'${withoutAnyVersions(coord.unversioned)}': {\n        ${
-            p.map {
-              case (k, v: String) ⇒
-                s"'$k': '$v'"
-              case (k, vs: List[String]) ⇒
-                s"'$k': [\n            ${vs.map { v ⇒ s"'$v'," }.mkString("\n            ")}\n        ]"
-              case (k, v) ⇒
-                sys.error(s"unrecognized type '$v'")
-            }.mkString(",\n        ")
-          }\n    },"""
+            val deps: List[String] = dependencies.toList.map {
+              case r: ResolvedMavenCoordinate ⇒
+                s"@${repositoryName(r.coord.unversioned)}"
+              case r: Replacement ⇒
+                s"@${repositoryName(r.actual)}"
+            }.sorted
+            if (deps.nonEmpty) {
+              p += ("deps" → deps.sorted)
+            }
+        }
 
+        if (tags.nonEmpty) {
+          p += ("tags" → tags.toList.sorted)
+        }
+
+        s"""'${withoutAnyVersions(r.unversionedCoord)}': {\n        ${
+          p.map {
+            case (k, v: String) ⇒
+              s"'$k': '$v'"
+            case (k, vs: List[String]) ⇒
+              s"'$k': [\n            ${vs.map { v ⇒ s"'$v'," }.mkString("\n            ")}\n        ]"
+            case (k, v) ⇒
+              sys.error(s"unrecognized type '$v'")
+          }.mkString(",\n        ")
+        }\n    },"""
       }.map(_.replace(''', '"')).sorted
 
       val resolvers = for {

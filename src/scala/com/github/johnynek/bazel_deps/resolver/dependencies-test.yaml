@@ -11,6 +11,7 @@ options:
   versionConflictPolicy: highest
   namePrefix: com_github_johnynek_bazel_deps_
   outputFormat: "flatfile"
+  thirdPartyDirectory: 3rdparty/maven
 
 dependencies:
   com.chuusai:

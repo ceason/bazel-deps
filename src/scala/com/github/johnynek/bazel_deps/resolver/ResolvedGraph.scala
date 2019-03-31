@@ -6,14 +6,17 @@ import com.github.johnynek.bazel_deps._
 import scala.collection.mutable
 import scala.util.Try
 
-sealed trait ResolvedNode
+sealed trait ResolvedNode {
+  def unversionedCoord: UnversionedCoordinate
+}
 
 case class Replacement(
   replacement: ReplacementRecord,
   actual: UnversionedCoordinate,
-  //replaced: Option[ResolvedMavenCoordinate],
   projectRecord: Option[ProjectRecord]
-) extends ResolvedNode
+) extends ResolvedNode {
+  override def unversionedCoord: UnversionedCoordinate = actual
+}
 
 case class ResolvedMavenCoordinate(
   coord: MavenCoordinate,
@@ -22,6 +25,8 @@ case class ResolvedMavenCoordinate(
   shas: ResolvedShasValue,
   projectRecord: Option[ProjectRecord]
 ) extends ResolvedNode {
+
+  override def unversionedCoord: UnversionedCoordinate = coord.unversioned
 
   val language: Language = {
     projectRecord
