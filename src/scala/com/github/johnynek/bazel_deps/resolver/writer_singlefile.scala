@@ -21,58 +21,27 @@ object SingleFileWriter {
     val roots: Set[UnversionedCoordinate] =
       m.dependencies.roots.map(_.unversioned)
 
-    val aliasFileContent: String = {
-      val comments: Map[UnversionedCoordinate, String] =
-        nodelist.collect {
-          case r@Replacement(replacement, actual, projectRecord) ⇒
-            actual → s"# ${replacement.target.asString}"
-          case r@ResolvedMavenCoordinate(coord, dependencies, duplicates, shas, projectRecord) =>
-            coord.unversioned → duplicatesComment(r)
-        }.toMap
-
-      s"package(default_visibility = ['//:__subpackages__'])\n\n" + nodelist.map {
-        case r@Replacement(replacement, actual, pr) =>
-          actual
-        case r@ResolvedMavenCoordinate(coord, dependencies, duplicates, shas, projectRecord) =>
-          coord.unversioned
-      }.sortBy(_.asString).map { coord ⇒
-        val alias = new mutable.ArrayBuffer[String]()
-        for (comment ← comments.get(coord)) {
-          alias += comment
-        }
-        alias +=
-          s"""alias(
-             |    name = "${aliasName(coord)}",
-             |    actual = "@${repositoryName(coord)}",""".stripMargin
-        if (!roots.contains(coord)) {
-          alias += """    tags = ["no-ide"],"""
-        }
-        if (m.getOptions.strictVisibility.exists(_.enabled) && !roots.contains(coord)) {
-          alias += """    visibility = ["//visibility:private"],"""
-        }
-        alias += ")"
-        alias.mkString("\n")
-      }.mkString("\n\n") + "\n"
-    }
-
     val lockfileContent: String = {
       val template = Source.fromInputStream(getClass.getResource(
         "/templates/singlefile_backend.bzl").openStream()).mkString
 
       val lines = nodelist.map { r ⇒
         val p = new mutable.ArrayBuffer[(String, Any)]
-        p += ("name" → repositoryName(r.unversionedCoord))
         var tags: mutable.ListBuffer[String] = new mutable.ListBuffer[String]
-        if (!roots.contains(r.unversionedCoord)) {
-          tags += "no-ide"
-        }
+//        if (!roots.contains(r.unversionedCoord)) {
+//          tags += "no-ide"
+//        }
+
         r match {
           case Replacement(replacement, actual, projectRecord) ⇒
             p += ("replacement" → replacement.target.asString)
           case ResolvedMavenCoordinate(coord, dependencies, duplicates, shas, pr) ⇒
             p += ("artifact" → coord.asString)
+            if (roots.contains(r.unversionedCoord)) {
+              p += ("is_root" → true)
+            }
             if (coord.artifact.packaging != "pom") {
-              p += ("jar_stamp" → s"//${m.getOptions.getThirdPartyDirectory.asString}:${aliasName(r.unversionedCoord)}")
+              //              p += ("jar_stamp" → s"//${m.getOptions.getThirdPartyDirectory.asString}:${aliasName(r.unversionedCoord)}")
               for (sha ← shas.binaryJar.sha256) {
                 p += ("sha256" → sha.toHex)
               }
@@ -84,9 +53,9 @@ object SingleFileWriter {
             }
             val deps: List[String] = dependencies.toList.map {
               case r: ResolvedMavenCoordinate ⇒
-                s"@${repositoryName(r.coord.unversioned)}"
+                label(r.coord.unversioned)
               case r: Replacement ⇒
-                s"@${repositoryName(r.actual)}"
+                label(r.actual)
             }.sorted
             if (deps.nonEmpty) {
               p += ("deps" → deps.sorted)
@@ -97,12 +66,14 @@ object SingleFileWriter {
           p += ("tags" → tags.toList.sorted)
         }
 
-        s"""'${withoutAnyVersions(r.unversionedCoord)}': {\n        ${
+        s"""'${label(r.unversionedCoord)}': {\n        ${
           p.map {
             case (k, v: String) ⇒
               s"'$k': '$v'"
             case (k, vs: List[String]) ⇒
               s"'$k': [\n            ${vs.map { v ⇒ s"'$v'," }.mkString("\n            ")}\n        ]"
+            case (k, v: Boolean) ⇒
+              s"'$k': ${if (v) "True" else "False"}"
             case (k, v) ⇒
               sys.error(s"unrecognized type '$v'")
           }.mkString(",\n        ")
@@ -110,24 +81,18 @@ object SingleFileWriter {
       }.map(_.replace(''', '"')).sorted
 
       val resolvers = for {
-        server ← m.options.toList.flatMap(_.resolvers).flatten.sortBy(_.id)
+        server ← m.options.toList.flatMap(_.resolvers).flatten
       } yield
-        s""""${server.id}": "${server.url}","""
+        s""""${server.url}","""
 
-      s"""_REPOSITORIES = {
+      s"""_REPOSITORIES = [
          |    ${resolvers.mkString("\n    ")}
-         |}
+         |]
          |_DEPENDENCIES = {
          |    ${lines.mkString("\n    ")}
          |}""".stripMargin + s"\n$template\n"
     }
-
-    val aliasFile = Paths.get(outputPath, "BUILD")
-    val lockfile = Paths.get(outputPath, "dependencies.bzl")
-
-    new File(outputPath).mkdirs()
-    writeFile(lockfile.toString, lockfileContent)
-    writeFile(aliasFile.toString, aliasFileContent)
+    writeFile(outputPath, lockfileContent)
 
     println(s"Number of nodes is '${nodelist.length}'")
   }
@@ -153,12 +118,19 @@ object SingleFileWriter {
     sb.mkString
   }
 
-  def repositoryName(r: UnversionedCoordinate)(implicit m: Model): String = {
-    val name = withoutAnyVersions(r)
-      .replace(".", "_")
-      .replace("-", "_")
-      .replace(":", "_")
-    m.getOptions.getNamePrefix.asString + name
+  def label(r: UnversionedCoordinate)(implicit m: Model): String = {
+    val artifactId = r.artifact.artifactId match {
+      case ScalaArtifactId(artifact, scalaBinaryVersion) ⇒
+        artifact
+      case other ⇒
+        other
+    }
+    val sb = new mutable.StringBuilder
+    sb ++= s"//${r.group.asString}:$artifactId"
+    for (classifier ← r.artifact.classifier) {
+      sb ++= s"/$classifier"
+    }
+    sb.mkString
   }
 
   def aliasName(c: UnversionedCoordinate)(implicit m: Model): String = {

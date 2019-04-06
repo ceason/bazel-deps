@@ -92,7 +92,8 @@ object MakeDeps {
               projectRoot.getAbsolutePath,
               model.getOptions.getThirdPartyDirectory.asString
             ).toAbsolutePath.toString
-            SingleFileWriter.executeGenerate(resolvedGraph, outputPath)
+            SingleFileWriter.executeGenerate(resolvedGraph,
+              s"${projectRoot.getAbsolutePath}/${g.shaFilePath}")
           case None =>
             val ws = Writer.workspace(g.depsFile, normalized, duplicates, shas, model)
             if (g.checkOnly) {
