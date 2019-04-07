@@ -21,6 +21,21 @@ object SingleFileWriter {
     val roots: Set[UnversionedCoordinate] =
       m.dependencies.roots.map(_.unversioned)
 
+    val duplicates: List[String] = nodelist.collect {
+      case r: ResolvedMavenCoordinate if r.duplicates.nonEmpty ⇒
+        r
+    }.sortBy(c ⇒ label(c.coord.unversioned)).map { coord: ResolvedMavenCoordinate ⇒
+
+
+      val sb = new mutable.StringBuilder
+      sb ++= s"""    "${label(coord.unversionedCoord)}\": [ # ${coord.coord.version.asString} \n"""
+      for (dup ← duplicatesComment(coord).sorted) {
+        sb ++= s"""        "${dup}",\n"""
+      }
+      sb ++= "    ],"
+      sb.mkString
+    }
+
     val lockfileContent: String = {
       val mavenWorkspaceName = m.getOptions
         .namePrefix.map(_.asString).getOrElse("maven")
@@ -32,9 +47,9 @@ object SingleFileWriter {
       val lines = nodelist.map { r ⇒
         val p = new mutable.ArrayBuffer[(String, Any)]
         var tags: mutable.ListBuffer[String] = new mutable.ListBuffer[String]
-//        if (!roots.contains(r.unversionedCoord)) {
-//          tags += "no-ide"
-//        }
+        //        if (!roots.contains(r.unversionedCoord)) {
+        //          tags += "no-ide"
+        //        }
         p += ("alias" → r.unversionedCoord.toBazelRepoName(m.getOptions.getNamePrefix))
         r match {
           case Replacement(replacement, actual, projectRecord) ⇒
@@ -89,7 +104,10 @@ object SingleFileWriter {
       } yield
         s""""${server.url}","""
 
-      s"""_REPOSITORIES = [
+      s"""_DUPLICATES = {
+         |${duplicates.mkString("\n")}
+         |}
+         |_REPOSITORIES = [
          |    ${resolvers.mkString("\n    ")}
          |]
          |_DEPENDENCIES = {
@@ -152,28 +170,16 @@ object SingleFileWriter {
     name.mkString
   }
 
-  def duplicatesComment(r: ResolvedMavenCoordinate)(implicit m: Model): String = {
+  def duplicatesComment(r: ResolvedMavenCoordinate)(implicit m: Model): List[String] = {
     def replaced(c: MavenCoordinate): Boolean = m.getReplacements.get(c.unversioned).isDefined
 
     val coord = r.coord
     val isRoot = m.dependencies.roots(coord)
     val v = r.coord.version
-    r.duplicates.toList match {
-      case Nil ⇒
-        s"# ${v.asString}"
-      case vs ⇒
-        val status =
-          if (isRoot) "fixed"
-          else if (vs.map(_.destination.version).max == v) "promoted"
-          else "downgraded"
-        s"""# ${v.asString} ($status)
-           |# duplicates:\n""".stripMargin +
-          vs.filterNot(e => replaced(e.source)).map { e ⇒
-            s"""# - ${e.destination.version.asString} wanted by ${e.source.asString}"""
-          }.sorted.mkString("\n")
+    r.duplicates.toList.filterNot(e => replaced(e.source)).map { e ⇒
+      s"""${e.destination.version.asString} wanted by ${e.source.asString}"""
     }
   }
-
 
   def writeFile(path: String, content: String): Unit = {
     // if file exists at path, read it in and compare content
