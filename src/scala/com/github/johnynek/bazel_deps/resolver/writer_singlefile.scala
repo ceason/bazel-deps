@@ -22,8 +22,12 @@ object SingleFileWriter {
       m.dependencies.roots.map(_.unversioned)
 
     val lockfileContent: String = {
+      val mavenWorkspaceName = m.getOptions
+        .namePrefix.map(_.asString).getOrElse("maven")
+        .stripSuffix("_")
       val template = Source.fromInputStream(getClass.getResource(
         "/templates/singlefile_backend.bzl").openStream()).mkString
+        .replace("%{maven_workspace_name}", mavenWorkspaceName)
 
       val lines = nodelist.map { r ⇒
         val p = new mutable.ArrayBuffer[(String, Any)]
@@ -31,7 +35,7 @@ object SingleFileWriter {
 //        if (!roots.contains(r.unversionedCoord)) {
 //          tags += "no-ide"
 //        }
-
+        p += ("alias" → r.unversionedCoord.toBazelRepoName(m.getOptions.getNamePrefix))
         r match {
           case Replacement(replacement, actual, projectRecord) ⇒
             p += ("replacement" → replacement.target.asString)
