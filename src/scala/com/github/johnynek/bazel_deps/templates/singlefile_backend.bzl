@@ -4,34 +4,17 @@ _MAVEN_WORKSPACE_NAME = "%{maven_workspace_name}"
 
 _JVM_IMPORT_BZL = """
 def _jvm_import_impl(ctx):
-    jar = None
-    srcjar = None
-    for f in ctx.files.jars:
-        if f.basename.endswith("-sources.jar"):
-            srcjar = f
-        else:
-            jar = f
-    compile_jar = ctx.actions.declare_file("%s-stamped.jar" % jar.basename[:-len(".jar")])
-    ctx.actions.run(
-        inputs = [jar],
-        outputs = [compile_jar],
-        executable = ctx.executable._singlejar,
-        arguments = [
-            "--sources", jar.path,
-            "--output", compile_jar.path,
-            "--deploy_manifest_lines", "Target-Label: %s" % str(ctx.label),
-            "--normalize",
-            "--exclude_build_data",
-        ],
-    )
+    if len(ctx.files.jars) != 1:
+        fail("Must specify exactly one jar", attr = "jars")
+    jar = ctx.files.jars[0]
     return [
         DefaultInfo(
             files = depset(direct = [jar]),
         ),
         JavaInfo(
             output_jar = jar,
-            compile_jar = compile_jar,
-            source_jar = srcjar,
+            compile_jar = java_common.stamp_jar(ctx.actions, jar = jar, target_label = ctx.label, java_toolchain = ctx.attr._java_toolchain),
+            source_jar = getattr(ctx.file, "srcjar", None),
             deps = [d[JavaInfo] for d in getattr(ctx.attr, "deps", [])],
         ),
     ]
@@ -41,84 +24,65 @@ jvm_import = rule(
     attrs = {
         "jars": attr.label_list(allow_files = [".jar"]),
         "deps": attr.label_list(providers = [JavaInfo]),
-        "_singlejar": attr.label(
-            executable = True,
-            cfg = "host",
-            default = Label("@bazel_tools//tools/jdk:singlejar"),
-            allow_files = True,
-        ),
+        "srcjar": attr.label(allow_single_file = ["-sources.jar"]),
+        "_java_toolchain": attr.label(default = Label("@bazel_tools//tools/jdk:current_java_toolchain")),
     },
 )
 """
 
-def _artifact_repository_impl(ctx):
-    files = []
-    files += [_download_artifact(ctx, ctx.attr.sha256)]
-    if ctx.attr.sha256_src:
-        files += [_download_artifact(ctx, ctx.attr.sha256, classifier = "sources")]
-    ctx.file("BUILD", """
-filegroup(
-    name = "file",
-    srcs = [
-        {files}
-    ],
-    visibility = ["//visibility:public"],
-)
-""".format(
-        files = "\n        ".join(['"%s",' % f for f in files]),
-    ))
-
-_artifact_repository = repository_rule(
-    _artifact_repository_impl,
-    attrs = {
-        "artifact": attr.string(mandatory = True),
-        "sha256": attr.string(mandatory = True),
-        "sha256_src": attr.string(),
-    },
-    environ = [_FETCH_SOURCES_ENV_VAR],
-)
-
-def _serialize_rule(name, **kwargs):
+def _serialize_rule(ctx, name, **kwargs):
     lines = []
+
+    #visibility = ["//:__subpackages__", "//external:__pkg__"]
+    visibility = ["//visibility:public"]
+    tags = []
+    if "alias" in kwargs:
+        #visibility += ["@%s//:__subpackages__" % kwargs["alias"]]
+        pass
     if "replacement" in kwargs:
+        #visibility = ["//visibility:public"]
         lines += [
             "",
             "alias(",
             '    name = "%s",' % name,
             '    actual = "%s",' % kwargs["replacement"],
-            '    visibility = ["//visibility:public"],',
+            "    visibility = [%s]," % _serialize_list(sorted(visibility)),
             ")",
             "",
         ]
     else:
         coord = _decode_maven_coordinates(kwargs["artifact"])
-        common_attrs = []
-        common_attrs.append('    name = "%s",' % name)
+        tags += ["maven_coordinates=%s" % kwargs["artifact"]]
         if kwargs.get("is_root"):
-            common_attrs.append('    tags = ["maven_coordinates=%s"],' % kwargs["artifact"])
-            common_attrs.append('    visibility = ["//visibility:public"],')
+            #visibility = ["//visibility:public"]
+            pass
         else:
-            common_attrs.append("    tags = [")
-            common_attrs.append('        "maven_coordinates=%s",' % kwargs["artifact"])
-            common_attrs.append('        "no-ide",')
-            common_attrs.append("    ],")
+            tags += ["no-ide"]
 
         # handle each type of artifact appropriately
         if coord.packaging == "pom":
             lines.append("java_library(")
-            lines += common_attrs
+            lines.append('    name = "%s",' % name)
             lines.append("    exports = [%s]," % _serialize_list(kwargs.get("deps")))
+            lines.append("    visibility = [%s]," % _serialize_list(sorted(visibility)))
+            lines.append("    tags = [%s]," % _serialize_list(sorted(tags)))
             lines.append(")")
         elif coord.packaging == "aar":
             lines.append("aar_import(")
-            lines += common_attrs
-            lines.append('    aar = "@%s//:file",' % _artifact_repository_name(kwargs["artifact"]))
+            lines.append('    name = "%s",' % name)
+            lines.append('    aar = "%s",' % _download_artifact(ctx, coord, kwargs["sha256"]))
+            lines.append("    visibility = [%s]," % _serialize_list(sorted(visibility)))
+            lines.append("    tags = [%s]," % _serialize_list(sorted(tags)))
             lines.append(")")
         elif coord.packaging == "jar":
             lines.append("jvm_import(")
-            lines += common_attrs
-            lines.append('    jars = ["@%s//:file"],' % _artifact_repository_name(kwargs["artifact"]))
+            lines.append('    name = "%s",' % name)
+            lines.append('    jars = ["%s"],' % _download_artifact(ctx, coord, kwargs["sha256"]))
+            if "sha256_src" in kwargs and ctx.os.environ.get(_FETCH_SOURCES_ENV_VAR, "true").lower() == "true":
+                lines.append('    srcjar = "%s",' % _download_artifact(ctx, coord, kwargs["sha256_src"], classifier = "sources"))
             lines.append("    deps = [%s]," % _serialize_list(kwargs.get("deps")))
+            lines.append("    visibility = [%s]," % _serialize_list(sorted(visibility)))
+            lines.append("    tags = [%s]," % _serialize_list(sorted(tags)))
             lines.append(")")
         else:
             fail("Unsupported packaging '%s' (expected 'pom', 'jar' or 'aar')" % coord.packaging, attr = "artifact")
@@ -153,16 +117,16 @@ def _imports_repository_impl(ctx):
             "",
         ]
         for name in sorted(targets.keys()):
-            lines += _serialize_rule(name, **targets[name])
+            lines += _serialize_rule(ctx, name, **targets[name])
         ctx.file("%s/BUILD" % pkg, "\n".join(lines))
     return
 
 _imports_repository = repository_rule(
     _imports_repository_impl,
+    environ = [_FETCH_SOURCES_ENV_VAR],
 )
 
-def _download_artifact(ctx, sha256, classifier = None):
-    coord = _decode_maven_coordinates(ctx.attr.artifact)
+def _download_artifact(ctx, coord, sha256, classifier = None):
     classifier = classifier or coord.classifier or ""
     if classifier:
         classifier = "-" + classifier
@@ -170,16 +134,16 @@ def _download_artifact(ctx, sha256, classifier = None):
     version = coord.version
     packaging = coord.packaging
     artifact_id = coord.artifact_id
-    final_name = artifact_id + "-" + version + classifier + "." + packaging
-    url_suffix = group_id + "/" + artifact_id + "/" + version + "/" + final_name
+    basename = artifact_id + "-" + version + classifier + "." + packaging
+    url_suffix = group_id + "/" + artifact_id + "/" + version + "/" + basename
     urls = []
     for server_url in _REPOSITORIES:
         if not server_url.endswith("/"):
             urls += [server_url + "/" + url_suffix]
         else:
             urls += [server_url + url_suffix]
-    ctx.download(urls, output = final_name, sha256 = sha256)
-    return final_name
+    ctx.download(urls, output = coord.group_id + "/" + basename, sha256 = sha256)
+    return basename
 
 def _decode_maven_coordinates(artifact, default_packaging = "jar"):
     parts = artifact.split(":")
@@ -203,13 +167,6 @@ def _decode_maven_coordinates(artifact, default_packaging = "jar"):
         packaging = packaging,
     )
 
-def _artifact_repository_name(artifact):
-    s = artifact.lower()
-    s = s.replace(":", "_")
-    s = s.replace("-", "_")
-    s = s.replace(".", "_")
-    return s
-
 def _serialize_list(items):
     if not items:
         return ""
@@ -218,47 +175,7 @@ def _serialize_list(items):
         for i in items or []
     ])
 
-def _repo_alias_impl(ctx):
-    template = """
-alias(
-   name = "{name}",
-   actual = "{actual}",
-   visibility = ["//visibility:public"],
-)
-"""
-    actual = "@" + _MAVEN_WORKSPACE_NAME + ctx.attr.label
-    ctx.file("BUILD", template.format(
-        name = ctx.attr.name,
-        actual = actual,
-    ))
-    ctx.file("jar/BUILD", template.format(
-        name = "jar",
-        actual = actual,
-    ))
-
-_repo_alias = repository_rule(
-    _repo_alias_impl,
-    attrs = {
-        "label": attr.string(),
-    },
-)
-
-
 def maven_dependencies():
-    for label, kwargs in _DEPENDENCIES.items():
-        # download artifact if there is one
-        if "sha256" in kwargs:
-            _artifact_repository(
-                name = _artifact_repository_name(kwargs["artifact"]),
-                artifact = kwargs["artifact"],
-                sha256 = kwargs["sha256"],
-                sha256_src = kwargs.get("sha256_src"),
-            )
-        # redirect old style references to the maven workspace
-        _repo_alias(
-            name = kwargs["alias"],
-            label = label,
-        )
     # do 'jvm_import' graph repository
     _imports_repository(
         name = _MAVEN_WORKSPACE_NAME,
