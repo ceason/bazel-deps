@@ -75,6 +75,14 @@ object SingleFileWriter {
                 label(r.coord.unversioned)
               case r: Replacement ⇒
                 label(r.actual)
+            }.map{ l ⇒
+              // if the current pkg is same as label's pkg,
+              //  make the label relative, else prefix it with maven workspace name
+              if (l.startsWith(s"//${r.unversionedCoord.group.asString}:")) {
+                l.replace(s"//${r.unversionedCoord.group.asString}:", ":")
+              } else {
+                "@" + mavenWorkspaceName + l
+              }
             }.sorted
             if (deps.nonEmpty) {
               p += ("deps" → deps.sorted)
