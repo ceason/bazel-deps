@@ -1,15 +1,15 @@
 package com.github.johnynek.bazel_deps
 
-import java.io.{ BufferedReader, ByteArrayOutputStream, File, FileInputStream, FileReader, InputStream }
+import java.io.{BufferedReader, ByteArrayOutputStream, File, FileInputStream, FileReader, InputStream}
 import java.security.MessageDigest
+
 import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
-
 import org.typelevel.paiges.Doc
-import cats.kernel.{ CommutativeMonoid, Monoid, Semigroup }
+import cats.kernel.{CommutativeMonoid, Monoid, Semigroup}
 import cats.implicits._
-import cats.{ Applicative, Functor, Foldable, Id, SemigroupK }
-import cats.data.{ Validated, ValidatedNel, Ior, NonEmptyList }
+import cats.{Applicative, Foldable, Functor, Id, SemigroupK}
+import cats.data.{Ior, NonEmptyList, Validated, ValidatedNel}
 
 /**
  * These should be upstreamed to paiges
@@ -427,7 +427,7 @@ case class MavenCoordinate(group: MavenGroup, artifact: MavenArtifactId, version
   def toDependencies(l: Language): Dependencies =
     Dependencies(Map(group ->
       Map(ArtifactOrProject(artifact.asString) ->
-        ProjectRecord(l, Some(version), None, None, None, None, None))))
+        ProjectRecord(l, Some(version), None, None, None, None, None, None, List.empty, List.empty, None, None))))
 }
 
 object MavenCoordinate {
@@ -593,7 +593,12 @@ case class ProjectRecord(
   exports: Option[Set[(MavenGroup, ArtifactOrProject)]],
   exclude: Option[Set[(MavenGroup, ArtifactOrProject)]],
   generatesApi: Option[Boolean],
-  processorClasses: Option[Set[ProcessorClass]]) {
+  processorClasses: Option[Set[ProcessorClass]],
+  replacement: Option[BazelTarget],
+  extraDeps: List[BazelTarget],
+  tags: List[String],
+  compileSources: Option[Boolean],
+  visible: Option[Boolean]) {
 
 
   // Cache this
