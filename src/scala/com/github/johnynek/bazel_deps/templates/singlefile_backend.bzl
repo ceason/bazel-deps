@@ -13,7 +13,7 @@ def _jvm_import_impl(ctx):
         ),
         JavaInfo(
             output_jar = jar,
-            compile_jar = java_common.stamp_jar(ctx.actions, jar = jar, target_label = ctx.label, java_toolchain = ctx.attr._java_toolchain),
+            compile_jar = java_common.stamp_jar(ctx.actions, jar = jar, target_label = ctx.label, java_toolchain = ctx.attr._java_toolchain[java_common.JavaToolchainInfo]),
             source_jar = getattr(ctx.file, "srcjar", None),
             deps = [d[JavaInfo] for d in getattr(ctx.attr, "deps", [])],
         ),
@@ -25,7 +25,10 @@ jvm_import = rule(
         "jars": attr.label_list(allow_files = [".jar"]),
         "deps": attr.label_list(providers = [JavaInfo]),
         "srcjar": attr.label(allow_single_file = ["-sources.jar"]),
-        "_java_toolchain": attr.label(default = Label("@bazel_tools//tools/jdk:current_java_toolchain")),
+        "_java_toolchain": attr.label(
+            default = Label("@bazel_tools//tools/jdk:current_java_toolchain"),
+            providers = [java_common.JavaToolchainInfo],
+        ),
     },
 )
 """
